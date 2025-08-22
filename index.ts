@@ -1,4 +1,5 @@
 import { Brain } from './Brain';
+import { Connection } from './Connection';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -61,13 +62,27 @@ for (let x = 0; x < 10; x++) {
 console.log(brain.findShortestPath(brain.neurons[0][0][1], brain.neurons[5][5][9]));
 
 // ======================
+// Observable Set
+// ======================
+class ObservableSet<T> extends Set<T> {
+  private listeners = new Set<() => void>();
+  onChange(cb: () => void) { this.listeners.add(cb); return () => this.listeners.delete(cb); }
+  private emit() { for (const cb of this.listeners) cb(); }
+  add(value: T): this { const had = this.has(value); super.add(value); if (!had) this.emit(); return this; }
+  delete(value: T): boolean { const ok = super.delete(value); if (ok) this.emit(); return ok; }
+  clear(): void { if (this.size) { super.clear(); this.emit(); } }
+  replace(values: Iterable<T>) { super.clear(); for (const v of values) super.add(v); this.emit(); }
+}
+
+// ======================
 // Visualization (three.js)
 // ======================
 
 // Config
 const GRID_SPACING = 15; // distance between neighboring nodes
 const NODE_RADIUS = 1.6; // base radius for neurons
-const LINE_ALPHA = 0.12; // line translucency
+const LINE_ALPHA = 0.12; // line translucency for background connections
+const TRACE_ALPHA = 0.9;  // line translucency for trace/highlight
 const USE_ADDITIVE_FOR_LINES = true; // enable additive blending for glow-like lines
 
 // Compute weight range (from connections distances)
@@ -133,6 +148,27 @@ function makeLabelSprite(text: string, color = '#ffffff') {
   return sprite;
 }
 
+// Global dynamic sets
+const connections = new ObservableSet<Connection>();
+for (const a of brain.allNeurons) {
+  for (const c of a.connections) connections.add(c);
+}
+const trace = new ObservableSet<Connection>();
+
+// Expose helpers for interactive updates in console
+(Object.assign(window as any, {
+  brain,
+  connections,
+  trace,
+  n: (x: number, y: number, z: number) => brain.neurons?.[x]?.[y]?.[z],
+  showPath: (fx: number, fy: number, fz: number, tx: number, ty: number, tz: number) => {
+    const from = brain.neurons?.[fx]?.[fy]?.[fz];
+    const to = brain.neurons?.[tx]?.[ty]?.[tz];
+    if (from && to) trace.replace(brain.findShortestPath(from, to));
+  },
+  clearTrace: () => trace.clear(),
+}))
+
 window.addEventListener('load', () => {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement;
   if (!canvas) {
@@ -174,7 +210,6 @@ window.addEventListener('load', () => {
   controls.maxPolarAngle = Math.PI * 0.98;
 
   // Lighting (basic, since we use mostly unlit materials)
-  // Add subtle ambient to help any lit materials
   scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
   // Neurons as instanced spheres
@@ -207,56 +242,75 @@ window.addEventListener('load', () => {
   neuronMesh.instanceColor && (neuronMesh.instanceColor.needsUpdate = true);
   scene.add(neuronMesh);
 
-  // Connections as line segments
-  // Gather all directed connections
-  const directedConnections = [] as { ax: number; ay: number; az: number; bx: number; by: number; bz: number; w: number }[];
-  for (const a of brain.allNeurons) {
-    for (const c of a.connections) {
+  // Helpers to (re)build line segments from a Set<Connection>
+  const colBase = new THREE.Color(0x64c8ff);
+  const colTrace = new THREE.Color(0xffd166); // warm yellow for trace
+
+  function fillGeomFromConnections(geom: THREE.BufferGeometry, arr: Connection[], colorize: (c: Connection) => THREE.Color) {
+    const N = arr.length;
+    const positions = new Float32Array(N * 2 * 3);
+    const colors = new Float32Array(N * 2 * 3);
+
+    for (let i = 0; i < N; i++) {
+      const c = arr[i];
       const A = toWorld(c.source.x, c.source.y, c.source.z);
       const B = toWorld(c.target.x, c.target.y, c.target.z);
-      directedConnections.push({ ax: A.x, ay: A.y, az: A.z, bx: B.x, by: B.y, bz: B.z, w: c.distance });
+
+      const idx = i * 2 * 3;
+      positions[idx + 0] = A.x; positions[idx + 1] = A.y; positions[idx + 2] = A.z;
+      positions[idx + 3] = B.x; positions[idx + 4] = B.y; positions[idx + 5] = B.z;
+
+      const col = colorize(c);
+      colors[idx + 0] = col.r; colors[idx + 1] = col.g; colors[idx + 2] = col.b;
+      colors[idx + 3] = col.r; colors[idx + 4] = col.g; colors[idx + 5] = col.b;
     }
+
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   }
 
-  if (directedConnections.length > 0) {
-    const positions = new Float32Array(directedConnections.length * 2 * 3);
-    const colors = new Float32Array(directedConnections.length * 2 * 3);
-
-    const colA = new THREE.Color(0x64c8ff); // base color for lines
-
-    for (let i = 0; i < directedConnections.length; i++) {
-      const { ax, ay, az, bx, by, bz, w } = directedConnections[i];
-      const idx = i * 2 * 3;
-      positions[idx + 0] = ax;
-      positions[idx + 1] = ay;
-      positions[idx + 2] = az;
-      positions[idx + 3] = bx;
-      positions[idx + 4] = by;
-      positions[idx + 5] = bz;
-
-      // Vary brightness by normalized weight (optional)
-      const wf = (w - WEIGHT_MIN) / Math.max(1e-6, WEIGHT_MAX - WEIGHT_MIN);
-      const lineCol = colA.clone().lerp(new THREE.Color(0xffffff), 0.35 * wf);
-
-      colors[idx + 0] = lineCol.r; colors[idx + 1] = lineCol.g; colors[idx + 2] = lineCol.b;
-      colors[idx + 3] = lineCol.r; colors[idx + 4] = lineCol.g; colors[idx + 5] = lineCol.b;
-    }
-
-    const lineGeom = new THREE.BufferGeometry();
-    lineGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    lineGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const lineMat = new THREE.LineBasicMaterial({
+  function makeLineSegments(opacity: number) {
+    const geom = new THREE.BufferGeometry();
+    const mat = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: LINE_ALPHA,
+      opacity,
       depthWrite: false,
       blending: USE_ADDITIVE_FOR_LINES ? THREE.AdditiveBlending : THREE.NormalBlending,
     });
-
-    const lines = new THREE.LineSegments(lineGeom, lineMat);
-    scene.add(lines);
+    return new THREE.LineSegments(geom, mat);
   }
+
+  // Base connections layer
+  const baseLines = makeLineSegments(LINE_ALPHA);
+  scene.add(baseLines);
+
+  const baseColorize = (c: Connection) => {
+    const wf = (c.distance - WEIGHT_MIN) / Math.max(1e-6, WEIGHT_MAX - WEIGHT_MIN);
+    return colBase.clone().lerp(new THREE.Color(0xffffff), 0.35 * wf);
+  };
+
+  function refreshBaseLines() {
+    const arr = Array.from(connections);
+    fillGeomFromConnections(baseLines.geometry as THREE.BufferGeometry, arr, baseColorize);
+  }
+
+  refreshBaseLines();
+  connections.onChange(refreshBaseLines);
+
+  // Trace layer
+  const traceLines = makeLineSegments(TRACE_ALPHA);
+  scene.add(traceLines);
+
+  const traceColorize = (_c: Connection) => colTrace.clone();
+
+  function refreshTraceLines() {
+    const arr = Array.from(trace);
+    fillGeomFromConnections(traceLines.geometry as THREE.BufferGeometry, arr, traceColorize);
+  }
+
+  refreshTraceLines();
+  trace.onChange(refreshTraceLines);
 
   // Planes for input/output layers
   const spanX = (X_MAX - X_MIN) * GRID_SPACING;
@@ -301,6 +355,9 @@ window.addEventListener('load', () => {
       camera.updateProjectionMatrix();
     }
   }
+
+  // Optionally show an initial path as a demo
+  // trace.replace(brain.findShortestPath(brain.neurons[0][0][1], brain.neurons[5][5][9]));
 
   // Animation loop
   function animate() {
