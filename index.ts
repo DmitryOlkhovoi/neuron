@@ -15,6 +15,16 @@ for (let x = 0; x < 10; x++) {
   }
 }
 
+// Target values
+for (let x = 0; x < 10; x++) {
+    const n = brain.addNeuron(4, x, 10)
+    n.value = x;
+}
+
+// Input matrix
+
+
+
 // brain.connectLocalNeighbors(); // Optional: local neighborhood
 for (let x = 0; x < 10; x++) {
   for (let y = 0; y < 10; y++) {
@@ -215,7 +225,7 @@ window.addEventListener('load', () => {
 
   // Neurons as instanced spheres
   const neuronGeom = new THREE.SphereGeometry(NODE_RADIUS, 16, 12);
-  const neuronMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const neuronMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const neuronMesh = new THREE.InstancedMesh(neuronGeom, neuronMat, brain.allNeurons.length);
   neuronMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
@@ -235,12 +245,15 @@ window.addEventListener('load', () => {
     tmpObj.updateMatrix();
     neuronMesh.setMatrixAt(i, tmpObj.matrix);
 
-    if (n.z === Z_MIN) color.copy(cGreen);
-    else if (n.z === Z_MAX) color.copy(cRed);
-    else color.copy(cCyan);
+    // Keep this call harmless; material ignores instance colors now
+    if (n?.value === true) {
+        color.set('green')
+    } else {
+        color.set(0xffffff);
+    }
     neuronMesh.setColorAt(i, color);
   }
-  neuronMesh.instanceColor && (neuronMesh.instanceColor.needsUpdate = true);
+  neuronMesh.instanceMatrix.needsUpdate = true;
   scene.add(neuronMesh);
 
   // Helpers to (re)build line segments from a Set<Connection>
