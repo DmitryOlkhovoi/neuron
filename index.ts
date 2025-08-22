@@ -349,6 +349,14 @@ function buildPathsFromActiveInputsToTarget(target: any) {
     }
   }
   trace.replace(set);
+
+  // count set distance
+    let totalDistance = 0;
+    for (const c of set) {
+      totalDistance += c.distance;
+    }
+    console.log(set)
+    console.log(`Total distance of active input paths to target ${target.value}: ${totalDistance.toFixed(2)}. Size: ${set.size}`);
 }
 
 function highlightActiveInputPathsToOutputValue(val: number) {
