@@ -2,6 +2,7 @@ import { Brain } from './Brain';
 import { Connection } from './Connection';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { randomRange } from './Random';
 
 // ======================
 // Build brain (data model)
@@ -62,39 +63,39 @@ for (let x = 0; x < 10; x++) {
   for (let y = 0; y < 10; y++) {
     for (let z = 0; z < 10; z++) {
       if (brain.neurons[x][y][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x][y][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x][y][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x - 1] && brain.neurons[x - 1][y] && brain.neurons[x - 1][y][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x + 1] && brain.neurons[x + 1][y] && brain.neurons[x + 1][y][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x][y + 1] && brain.neurons[x][y + 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x][y + 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x][y + 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x - 1] && brain.neurons[x - 1][y + 1] && brain.neurons[x - 1][y + 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y + 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y + 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x + 1] && brain.neurons[x + 1][y + 1] && brain.neurons[x + 1][y + 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y + 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y + 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x][y - 1] && brain.neurons[x][y - 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x][y - 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x][y - 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x - 1] && brain.neurons[x - 1][y - 1] && brain.neurons[x - 1][y - 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y - 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x - 1][y - 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
 
       if (brain.neurons[x + 1] && brain.neurons[x + 1][y - 1] && brain.neurons[x + 1][y - 1][z + 1]) {
-        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y - 1][z + 1], 10); // connect to next layer neuron
+        brain.neurons[x][y][z].connectTo(brain.neurons[x + 1][y - 1][z + 1], randomRange(5, 15)); // connect to next layer neuron
       }
     }
   }
