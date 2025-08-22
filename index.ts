@@ -22,6 +22,38 @@ for (let x = 0; x < 10; x++) {
 }
 
 // Input matrix
+const INPUT7: number[][] = (() => {
+  const m = Array.from({ length: 10 }, () => Array(10).fill(0));
+  // smaller, centered, mirrored "7"
+  const w = 6, h = 6; // size of the digit box
+  const startX = Math.floor((10 - w) / 2);
+  const startY = Math.floor((10 - h) / 2);
+  const yTop = startY + h - 1;
+
+  // top horizontal bar
+  for (let dx = 0; dx < w; dx++) m[yTop][startX + dx] = 1;
+
+  // diagonal in the other direction: top-left to bottom-right
+  for (let i = 0; i < h; i++) {
+    const x = startX + i;
+    const y = yTop - i;
+    m[y][x] = 1;
+  }
+
+  return m;
+})();
+
+function applyInputMatrix(mat: number[][], z = 0) {
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) {
+      const n = brain.neurons?.[x]?.[y]?.[z];
+      if (n) n.value = !!(mat[y]?.[x]);
+    }
+  }
+}
+
+// Apply digit 7 to input layer z=0
+applyInputMatrix(INPUT7, 0);
 
 
 
@@ -67,9 +99,6 @@ for (let x = 0; x < 10; x++) {
     }
   }
 }
-
-// Debug shortest path (if needed)
-console.log(brain.findShortestPath(brain.neurons[0][0][1], brain.neurons[5][5][9]));
 
 // ======================
 // Observable Set
@@ -177,6 +206,8 @@ const trace = new ObservableSet<Connection>();
     if (from && to) trace.replace(brain.findShortestPath(from, to));
   },
   clearTrace: () => trace.clear(),
+  INPUT7,
+  applyInputMatrix,
 }))
 
 window.addEventListener('load', () => {
