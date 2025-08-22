@@ -202,12 +202,13 @@ window.addEventListener('load', () => {
   controls.target.set(0, 0, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.rotateSpeed = 0.8;
-  controls.zoomSpeed = 0.7;
-  controls.panSpeed = 0.6;
-  controls.minDistance = 60;
-  controls.maxDistance = 800;
-  controls.maxPolarAngle = Math.PI * 0.98;
+  controls.rotateSpeed = 1.0;
+  controls.zoomSpeed = 1.2;
+  controls.panSpeed = 1.0;
+  controls.minDistance = 5;
+  controls.maxDistance = 5000;
+  controls.minPolarAngle = 0;
+  controls.maxPolarAngle = Math.PI;
 
   // Lighting (basic, since we use mostly unlit materials)
   scene.add(new THREE.AmbientLight(0xffffff, 0.2));
