@@ -194,6 +194,42 @@ for (const a of brain.allNeurons) {
 }
 const trace = new ObservableSet<Connection>();
 
+// Build and show paths from all active input neurons (value === true) to a target in the output layer
+function findOutputNeuronByValue(val: number) {
+  for (const n of brain.allNeurons) {
+    if (n.z === Z_MAX && n.value === val) return n;
+  }
+  return undefined;
+}
+
+function buildPathsFromActiveInputsToTarget(target: any) {
+  const set = new Set<Connection>();
+  const zInput = Z_MIN;
+  for (let x = 0; x < brain.neurons.length; x++) {
+    const col = brain.neurons[x];
+    if (!col) continue;
+    for (let y = 0; y < col.length; y++) {
+      const row = col[y];
+      if (!row) continue;
+      const n = row[zInput];
+      if (n && n.value === true) {
+        const path = brain.findShortestPath(n, target);
+        for (const c of path) set.add(c);
+      }
+    }
+  }
+  trace.replace(set);
+}
+
+function highlightActiveInputPathsToOutputValue(val: number) {
+  const target = findOutputNeuronByValue(val);
+  if (!target) {
+    trace.clear();
+    return;
+  }
+  buildPathsFromActiveInputsToTarget(target);
+}
+
 // Expose helpers for interactive updates in console
 (Object.assign(window as any, {
   brain,
@@ -208,6 +244,7 @@ const trace = new ObservableSet<Connection>();
   clearTrace: () => trace.clear(),
   INPUT7,
   applyInputMatrix,
+  highlightActiveInputPathsToOutputValue,
 }))
 
 window.addEventListener('load', () => {
@@ -356,6 +393,8 @@ window.addEventListener('load', () => {
 
   refreshTraceLines();
   trace.onChange(refreshTraceLines);
+  // Compute and render paths from all active input neurons to the output neuron with value 7
+  highlightActiveInputPathsToOutputValue(7);
 
   // Planes for input/output layers
   const spanX = (X_MAX - X_MIN) * GRID_SPACING;
