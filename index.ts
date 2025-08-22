@@ -24,38 +24,66 @@ for (let x = 0; x < 10; x++) {
 }
 
 // Input matrix
-const INPUT7: number[][] = (() => {
+function makeDigitMatrix(d: number): number[][] {
   const m = Array.from({ length: 10 }, () => Array(10).fill(0));
-  // smaller, centered, mirrored "7"
-  const w = 6, h = 6; // size of the digit box
+  // Draw a centered 7-segment-like digit inside a 6x6 box
+  const w = 6, h = 6;
   const startX = Math.floor((10 - w) / 2);
   const startY = Math.floor((10 - h) / 2);
-  const yTop = startY + h - 1;
 
-  // top horizontal bar
-  for (let dx = 0; dx < w; dx++) m[yTop][startX + dx] = 1;
+  const x0 = startX;
+  const x1 = startX + w - 1;
+  const y0 = startY;
+  const y1 = startY + h - 1;
+  const ym = startY + Math.floor(h / 2);
 
-  // diagonal in the other direction: top-left to bottom-right
-  for (let i = 0; i < h; i++) {
-    const x = startX + i;
-    const y = yTop - i;
-    m[y][x] = 1;
-  }
+  const hline = (y: number, xa: number, xb: number) => {
+    for (let x = xa; x <= xb; x++) m[y][x] = 1;
+  };
+  const vline = (x: number, ya: number, yb: number) => {
+    for (let y = ya; y <= yb; y++) m[y][x] = 1;
+  };
+
+  const segs = {
+    a: () => hline(y1, x0, x1),     // top
+    b: () => vline(x1, ym, y1),     // upper-right
+    c: () => vline(x1, y0, ym),     // lower-right
+    d: () => hline(y0, x0, x1),     // bottom
+    e: () => vline(x0, y0, ym),     // lower-left
+    f: () => vline(x0, ym, y1),     // upper-left
+    g: () => hline(ym, x0, x1),     // middle
+  } as const;
+
+  const DIGITS: Record<number, (keyof typeof segs)[]> = {
+    0: ['a','b','c','d','e','f'],
+    1: ['b','c'],
+    2: ['a','b','g','e','d'],
+    3: ['a','b','g','c','d'],
+    4: ['f','g','b','c'],
+    5: ['a','f','g','c','d'],
+    6: ['a','f','g','c','d','e'],
+    7: ['a','b','c'],
+    8: ['a','b','c','d','e','f','g'],
+    9: ['a','b','c','d','f','g'],
+  };
+
+  for (const s of DIGITS[(d % 10 + 10) % 10] ?? []) segs[s]();
 
   return m;
-})();
+}
 
 function applyInputMatrix(mat: number[][], z = 0) {
   for (let y = 0; y < 10; y++) {
     for (let x = 0; x < 10; x++) {
       const n = brain.neurons?.[x]?.[y]?.[z];
-      if (n) n.value = !!(mat[y]?.[x]);
+      if (n) n.value = !!(mat[y]?.[Math.max(0, (mat[y]?.length ?? 10) - 1 - x)]);
     }
   }
 }
 
-// Apply digit 7 to input layer z=0
-applyInputMatrix(INPUT7, 0);
+// Apply initial digit to input layer z=0
+const CURRENT_DIGIT = 6;
+applyInputMatrix(makeDigitMatrix(CURRENT_DIGIT), 0);
 
 
 
@@ -380,8 +408,9 @@ function highlightActiveInputPathsToOutputValue(val: number) {
     if (from && to) trace.replace(brain.findShortestPath(from, to));
   },
   clearTrace: () => trace.clear(),
-  INPUT7,
+  makeDigitMatrix,
   applyInputMatrix,
+  setDigit: (d: number) => { applyInputMatrix(makeDigitMatrix(d), 0); highlightActiveInputPathsToOutputValue(d); },
   highlightActiveInputPathsToOutputValue,
 }))
 
@@ -531,8 +560,8 @@ window.addEventListener('load', () => {
 
   refreshTraceLines();
   trace.onChange(refreshTraceLines);
-  // Compute and render paths from all active input neurons to the output neuron with value 7
-  highlightActiveInputPathsToOutputValue(7);
+  // Compute and render paths from all active input neurons to the output neuron with value CURRENT_DIGIT
+  highlightActiveInputPathsToOutputValue(CURRENT_DIGIT);
 
   // Planes for input/output layers
   const spanX = (X_MAX - X_MIN) * GRID_SPACING;
