@@ -1,5 +1,6 @@
 import { Brain } from './Brain';
 import { Connection } from './Connection';
+import { Neuron } from './Neuron';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { randomRange } from './Random';
@@ -157,6 +158,134 @@ function toWorld(x: number, y: number, z: number) {
   );
 }
 
+// Layout settings
+const SHOW_LAYER_PLANES = false;
+const LAYOUT_MODE: 'grid' | 'connection' = 'grid';
+
+// Prepare index map for neurons
+const NODE_INDEX = new Map<Neuron, number>();
+for (let i = 0; i < brain.allNeurons.length; i++) {
+  NODE_INDEX.set(brain.allNeurons[i], i);
+}
+
+// Precompute positions using connection-aware spring layout
+const LAYOUT_POS = LAYOUT_MODE === 'connection'
+  ? computeConnectionLayoutPositions(brain, NODE_INDEX)
+  : null;
+
+// Utility to fetch current node position (in world coordinates)
+function getNodePosition(n: Neuron): THREE.Vector3 {
+  if (LAYOUT_MODE === 'connection' && LAYOUT_POS) {
+    const i = NODE_INDEX.get(n)!;
+    return new THREE.Vector3(
+      LAYOUT_POS[i * 3 + 0],
+      LAYOUT_POS[i * 3 + 1],
+      LAYOUT_POS[i * 3 + 2]
+    );
+  }
+  return toWorld(n.x, n.y, n.z);
+}
+
+// Spring layout solver based on connection distances
+function computeConnectionLayoutPositions(brain: Brain, nodeIndex: Map<Neuron, number>): Float32Array {
+  const N = brain.allNeurons.length;
+  const pos = new Float32Array(N * 3);
+  const vel = new Float32Array(N * 3);
+  const force = new Float32Array(N * 3);
+
+  // Initialize positions from grid with slight jitter
+  for (let i = 0; i < N; i++) {
+    const n = brain.allNeurons[i];
+    pos[i * 3 + 0] = (n.x - cx) * GRID_SPACING + randomRange(-GRID_SPACING * 0.1, GRID_SPACING * 0.1);
+    pos[i * 3 + 1] = (n.y - cy) * GRID_SPACING + randomRange(-GRID_SPACING * 0.1, GRID_SPACING * 0.1);
+    pos[i * 3 + 2] = (n.z - cz) * GRID_SPACING + randomRange(-GRID_SPACING * 0.1, GRID_SPACING * 0.1);
+  }
+
+  // Build undirected edge list with rest lengths from connection distances
+  const edges: number[] = []; // flat array [i, j, L, i, j, L, ...]
+  const seen = new Set<string>();
+  for (const a of brain.allNeurons) {
+    for (const c of a.connections) {
+      const i = nodeIndex.get(c.source);
+      const j = nodeIndex.get(c.target);
+      if (i == null || j == null) continue;
+      const key = i < j ? `${i},${j}` : `${j},${i}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const L = Math.max(1e-3, c.distance * GRID_SPACING);
+      edges.push(i, j, L);
+    }
+  }
+
+  const ITER = 260;
+  const dt = 0.02;
+  const k = 0.02;
+  const damping = 0.98;
+
+  for (let it = 0; it < ITER; it++) {
+    force.fill(0);
+
+    for (let e = 0; e < edges.length; e += 3) {
+      const i = edges[e] | 0;
+      const j = edges[e + 1] | 0;
+      const L = edges[e + 2];
+
+      const ix = i * 3;
+      const jx = j * 3;
+
+      let dx = pos[jx + 0] - pos[ix + 0];
+      let dy = pos[jx + 1] - pos[ix + 1];
+      let dz = pos[jx + 2] - pos[ix + 2];
+
+      let r = Math.hypot(dx, dy, dz);
+      if (r < 1e-6) {
+        dx = 1e-6; dy = 0; dz = 0;
+        r = 1e-6;
+      }
+      const invr = 1 / r;
+      dx *= invr; dy *= invr; dz *= invr;
+
+      const stretch = r - L;
+      const fmag = k * stretch;
+
+      const fx = fmag * dx;
+      const fy = fmag * dy;
+      const fz = fmag * dz;
+
+      force[ix + 0] += fx; force[ix + 1] += fy; force[ix + 2] += fz;
+      force[jx + 0] -= fx; force[jx + 1] -= fy; force[jx + 2] -= fz;
+    }
+
+    // Integrate
+    for (let i = 0; i < N; i++) {
+      const p = i * 3;
+      vel[p + 0] = (vel[p + 0] + force[p + 0] * dt) * damping;
+      vel[p + 1] = (vel[p + 1] + force[p + 1] * dt) * damping;
+      vel[p + 2] = (vel[p + 2] + force[p + 2] * dt) * damping;
+
+      pos[p + 0] += vel[p + 0] * dt;
+      pos[p + 1] += vel[p + 1] * dt;
+      pos[p + 2] += vel[p + 2] * dt;
+    }
+  }
+
+  // Recentre to origin
+  let sx = 0, sy = 0, sz = 0;
+  for (let i = 0; i < N; i++) {
+    sx += pos[i * 3 + 0];
+    sy += pos[i * 3 + 1];
+    sz += pos[i * 3 + 2];
+  }
+  sx /= N; sy /= N; sz /= N;
+  for (let i = 0; i < N; i++) {
+    pos[i * 3 + 0] -= sx;
+    pos[i * 3 + 1] -= sy;
+    pos[i * 3 + 2] -= sz;
+  }
+
+  return pos;
+}
+
 // Label sprite factory
 function makeLabelSprite(text: string, color = '#ffffff') {
   const canvas = document.createElement('canvas');
@@ -307,7 +436,7 @@ window.addEventListener('load', () => {
 
   for (let i = 0; i < brain.allNeurons.length; i++) {
     const n = brain.allNeurons[i];
-    const pos = toWorld(n.x, n.y, n.z);
+    const pos = getNodePosition(n);
     tmpObj.position.copy(pos);
     tmpObj.rotation.set(0, 0, 0);
     tmpObj.scale.set(1, 1, 1);
@@ -336,8 +465,8 @@ window.addEventListener('load', () => {
 
     for (let i = 0; i < N; i++) {
       const c = arr[i];
-      const A = toWorld(c.source.x, c.source.y, c.source.z);
-      const B = toWorld(c.target.x, c.target.y, c.target.z);
+      const A = getNodePosition(c.source);
+      const B = getNodePosition(c.target);
 
       const idx = i * 2 * 3;
       positions[idx + 0] = A.x; positions[idx + 1] = A.y; positions[idx + 2] = A.z;
@@ -426,8 +555,10 @@ window.addEventListener('load', () => {
     scene.add(sprite);
   }
 
-  addLayerPlane(Z_MIN, 0x00c878, 0x38a06a, 'ВХОД');
-  addLayerPlane(Z_MAX, 0xf05050, 0xbe4949, 'ВЫХОД');
+  if (SHOW_LAYER_PLANES) {
+    addLayerPlane(Z_MIN, 0x00c878, 0x38a06a, 'ВХОД');
+    addLayerPlane(Z_MAX, 0xf05050, 0xbe4949, 'ВЫХОД');
+  }
 
   // Resize handling
   function resizeRendererToDisplaySize() {
