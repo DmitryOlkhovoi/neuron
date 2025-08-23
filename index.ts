@@ -1,6 +1,7 @@
 import { Brain } from './Brain';
 import { Connection } from './Connection';
 import { Neuron } from './Neuron';
+import { Training } from './Training';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { randomRange } from './Random';
@@ -84,8 +85,6 @@ function applyInputMatrix(mat: number[][], z = 0) {
 // Apply initial digit to input layer z=0
 const CURRENT_DIGIT = 6;
 applyInputMatrix(makeDigitMatrix(CURRENT_DIGIT), 0);
-
-
 
 // brain.connectLocalNeighbors(); // Optional: local neighborhood
 for (let x = 0; x < 10; x++) {
@@ -396,9 +395,15 @@ function highlightActiveInputPathsToOutputValue(val: number) {
   buildPathsFromActiveInputsToTarget(target);
 }
 
+// ======================
+// Training System
+// ======================
+const training = new Training(brain, 0.1, 'neural_weights.json');
+
 // Expose helpers for interactive updates in console
 (Object.assign(window as any, {
   brain,
+  training,
   connections,
   trace,
   n: (x: number, y: number, z: number) => brain.neurons?.[x]?.[y]?.[z],
@@ -410,8 +415,107 @@ function highlightActiveInputPathsToOutputValue(val: number) {
   clearTrace: () => trace.clear(),
   makeDigitMatrix,
   applyInputMatrix,
-  setDigit: (d: number) => { applyInputMatrix(makeDigitMatrix(d), 0); highlightActiveInputPathsToOutputValue(d); },
+  setDigit: (d: number) => { 
+    applyInputMatrix(makeDigitMatrix(d), 0); 
+    if ((window as any).updateNeuronVisualization) {
+      (window as any).updateNeuronVisualization();
+    }
+    highlightActiveInputPathsToOutputValue(d); 
+  },
   highlightActiveInputPathsToOutputValue,
+  
+  // Training functions
+  trainDigit: (inputDigit: number, expectedOutput: number) => {
+    applyInputMatrix(makeDigitMatrix(inputDigit), 0);
+    const success = training.trainOnExample(inputDigit, expectedOutput);
+    if (success) {
+      highlightActiveInputPathsToOutputValue(expectedOutput);
+      console.log(`Training completed for digit ${inputDigit} -> ${expectedOutput}`);
+    }
+    return success;
+  },
+  
+  trainAll: (epochs = 5) => {
+    const examples: [number, number][] = [];
+    for (let i = 0; i <= 9; i++) {
+      examples.push([i, i]); // каждая цифра должна распознаваться как сама себя
+    }
+    training.trainBatch(examples, epochs);
+    console.log(`Training completed: ${epochs} epochs on all digits`);
+  },
+  
+  testDigit: (digit: number) => {
+    applyInputMatrix(makeDigitMatrix(digit), 0);
+    // Update neuron visualization to show the new digit
+    if ((window as any).updateNeuronVisualization) {
+      (window as any).updateNeuronVisualization();
+    }
+    const prediction = training.predict();
+    // Highlight path to the CORRECT output (digit), not the predicted one
+    highlightActiveInputPathsToOutputValue(digit);
+    console.log(`Input: ${digit}, Predicted: ${prediction}, ${prediction === digit ? '✓ Correct' : '✗ Wrong'}`);
+    console.log(`Showing path to CORRECT output (${digit}), not predicted output (${prediction})`);
+    return prediction;
+  },
+
+  // Show path to predicted output instead of correct output
+  testDigitShowPredicted: (digit: number) => {
+    applyInputMatrix(makeDigitMatrix(digit), 0);
+    if ((window as any).updateNeuronVisualization) {
+      (window as any).updateNeuronVisualization();
+    }
+    const prediction = training.predict();
+    // Highlight path to the PREDICTED output
+    highlightActiveInputPathsToOutputValue(prediction);
+    console.log(`Input: ${digit}, Predicted: ${prediction}, ${prediction === digit ? '✓ Correct' : '✗ Wrong'}`);
+    console.log(`Showing path to PREDICTED output (${prediction}), not correct output (${digit})`);
+    return prediction;
+  },
+  
+  testAll: () => {
+    const examples: [number, number][] = [];
+    for (let i = 0; i <= 9; i++) {
+      examples.push([i, i]);
+    }
+    return training.testAccuracy(examples);
+  },
+  
+  saveWeights: () => training.saveWeights(),
+  loadWeights: () => training.loadWeights(),
+  
+  // Utility functions
+  getTrainingStats: () => ({
+    trainingSteps: training.trainingSteps,
+    learningRate: training.currentLearningRate
+  }),
+  
+  setLearningRate: (rate: number) => training.setLearningRate(rate),
+  
+  // Quick training demo
+  quickDemo: async () => {
+    console.log('🚀 Starting quick training demo...');
+    
+    // Test before training
+    console.log('\n📊 Testing accuracy before training:');
+    const accuracyBefore = (window as any).testAll();
+    
+    // Train for a few epochs
+    console.log('\n🎯 Training on all digits (3 epochs)...');
+    (window as any).trainAll(10);
+    
+    // Test after training
+    console.log('\n📊 Testing accuracy after training:');
+    const accuracyAfter = (window as any).testAll();
+    
+    console.log(`\n📈 Improvement: ${((accuracyAfter - accuracyBefore) * 100).toFixed(1)}% points`);
+    
+    // Save weights
+    console.log('\n💾 Saving trained weights...');
+    await (window as any).saveWeights();
+    
+    console.log('✅ Demo completed!');
+    return { accuracyBefore, accuracyAfter };
+  }
 }))
 
 window.addEventListener('load', () => {
@@ -490,6 +594,25 @@ window.addEventListener('load', () => {
   }
   neuronMesh.instanceMatrix.needsUpdate = true;
   scene.add(neuronMesh);
+
+  // Function to update neuron colors based on their values
+  function updateNeuronColors() {
+    for (let i = 0; i < brain.allNeurons.length; i++) {
+      const n = brain.allNeurons[i];
+      if (n?.value === true) {
+        color.set('green');
+      } else {
+        color.set(0xffffff);
+      }
+      neuronMesh.setColorAt(i, color);
+    }
+    if (neuronMesh.instanceColor) {
+      neuronMesh.instanceColor.needsUpdate = true;
+    }
+  }
+
+  // Expose the update function globally
+  (window as any).updateNeuronVisualization = updateNeuronColors;
 
   // Helpers to (re)build line segments from a Set<Connection>
   const colBase = new THREE.Color(0x64c8ff);

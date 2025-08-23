@@ -1,0 +1,37 @@
+{
+  "weights": [
+    {
+      "sourceX": 0,
+      "sourceY": 0,
+      "sourceZ": 0,
+      "targetX": 0,
+      "targetY": 0,
+      "targetZ": 1,
+      "weight": 8.5
+    },
+    {
+      "sourceX": 1,
+      "sourceY": 1,
+      "sourceZ": 0,
+      "targetX": 1,
+      "targetY": 1,
+      "targetZ": 1,
+      "weight": 7.2
+    },
+    {
+      "sourceX": 2,
+      "sourceY": 2,
+      "sourceZ": 1,
+      "targetX": 2,
+      "targetY": 2,
+      "targetZ": 2,
+      "weight": 6.8
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "totalTrainingSteps": 50,
+    "learningRate": 0.1
+  }
+}

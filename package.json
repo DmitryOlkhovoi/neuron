@@ -3,6 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "bun build index.ts --outdir ./dist --target browser --format esm",
+    "dev": "bun build index.ts --outdir ./dist --target browser --format esm --watch",
+    "serve": "python3 -m http.server 8000"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
